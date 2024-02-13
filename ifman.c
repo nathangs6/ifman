@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<dirent.h>
 #include<curl/curl.h>
 #include<getopt.h>
 #include<sys/stat.h>
@@ -9,7 +10,15 @@
  * HELP MODULE
  */
 int help() {
-    printf("Interactive Fiction Manager Help\nName\n\tifman - manages interactive fiction files and players.\nDescription\n\t--help display this help and exit\n");
+    printf("Interactive Fiction Manager Help\n"
+            "\t--help\n\t\tdisplay this help and exit\n"
+            "\t--version\n\t\tdisplay version of this program\n"
+            "\tinit\n\t\tinitializes the directory structure and index file\n"
+            "\tmanage\n\t\tmanages the games on your system. Use one of the following flags:\n"
+            "\t\t-S, --install <game>\n\t\t\tdownloads <game> from if-archive.\n"
+            "\t\t-D, --remove <game>\n\t\t\tremoves <game> from your system.\n"
+            "\t\t-l, --list\n\t\t\tlists all games on if-archive.\n"
+            "\tplay <game>\n\t\topens <game> with frotz.\n");
     return 0;
 }
 
@@ -162,6 +171,27 @@ void list() {
     fclose(fp);
 }
 
+void installed() {
+    char *home_directory = getenv("HOME");
+
+    char install_file_path[1048];
+    snprintf(install_file_path, sizeof(install_file_path), "%s/.ifman/games", home_directory);
+    
+    struct dirent *files;
+    DIR *dir = opendir(install_file_path);
+
+    if (dir == NULL) {
+        printf("Install directory cannot be opened!\n");
+        return ;
+    }
+    while ((files = readdir(dir)) != NULL) {
+        if (files->d_name[0] != '.') {
+            printf("%s\n", files->d_name);
+        }
+    }
+    closedir(dir);
+}
+
 void install_game(char *line) {
     CURL *curl;
     FILE *fp;
@@ -299,14 +329,18 @@ int manage(int argc, char **argv) {
     int opt;
     static struct option long_options[] = {
         {"list", no_argument, 0, 'l'},
+        {"installed", no_argument, 0, 'L'},
         {"install", required_argument, 0, 'S'},
         {"remove", required_argument, 0, 'D'},
         {0, 0, 0, 0}
     };
-    opt = getopt_long(argc, argv, "hvfS:D:", long_options, 0);
+    opt = getopt_long(argc, argv, "hvfS:D:L:", long_options, 0);
     switch (opt) {
         case 'l':
             list();
+            break;
+        case 'L':
+            installed();
             break;
         case 'S':
             install(optarg);
@@ -328,14 +362,22 @@ int play(int argc, char **argv) {
         printf("Please provide a game to play!\n");
         return 1;
     }
+
     char game[64];
     strcpy(game, argv[2]);
     int len = strlen(game);
     if (len > 0 && game[len-1] == '\n') {
         game[len-1] = '\0';
     }
+
+    char *home_directory = getenv("HOME");
+
+    char game_path[1048];
+    snprintf(game_path, sizeof(game_path), "%s/.ifman/games/%s", home_directory, game);
+
     char command[256];
-    snprintf(command, sizeof(command), "frotz %s", argv[2]);
+    snprintf(command, sizeof(command), "frotz %s", game_path);
+    printf("%s\n", command);
 
     int result = system(command);
 
