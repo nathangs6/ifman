@@ -23,7 +23,8 @@ int help() {
             "\tmanage\n\t\tmanages the games on your system. Use one of the following flags:\n"
             "\t\t-S, --install <game>\n\t\t\tdownloads <game> from if-archive.\n"
             "\t\t-D, --remove <game>\n\t\t\tremoves <game> from your system.\n"
-            "\t\t-l, --list\n\t\t\tlists all games on if-archive.\n"
+            "\t\t-l, --list [prefix]\n\t\t\tlists all games on if-archive starting with [prefix].\n"
+            "\t\t-L, --installed\n\t\t\tlists all games installed on system.\n"
             "\tplay <game>\n\t\topens <game> with frotz.\n");
     return 0;
 }
