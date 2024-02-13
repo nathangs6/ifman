@@ -1,10 +1,16 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include<stdbool.h>
 #include<string.h>
 #include<dirent.h>
 #include<curl/curl.h>
 #include<getopt.h>
 #include<sys/stat.h>
+
+#define OPTIONAL_ARGUMENT_IS_PRESENT \
+    ((optarg == NULL && optind < argc && argv[optind][0] != '-') \
+     ? (bool) (optarg = argv[optind++]) \
+     : (optarg != NULL))
 
 /*
  * HELP MODULE
@@ -99,7 +105,6 @@ void construct_index() {
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
-    char name[50];
     char link[50];
 
 
@@ -119,14 +124,7 @@ void construct_index() {
                 start++;
             }
             strcpy(link, start);
-
-            char *dot = strchr(start, '.');
-            if (dot != NULL) {
-                int name_length = dot - start;
-                strncpy(name, start, name_length);
-                name[name_length] = '\0';
-                fprintf(fp2, "%s,%s", name, link);
-            }
+            fprintf(fp2, "%s", link);
         }
     }
 
@@ -148,12 +146,11 @@ int init(int argc, char **argv) {
 /*
  * MANAGE MODULE
  */
-void list() {
+void list(char *arg) {
     FILE *fp;
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
-
 
     char *home_directory = getenv("HOME");
 
@@ -163,9 +160,14 @@ void list() {
 
     while ((read = getline(&line, &len, fp)) != -1) {
         char *start = line;
-        char *comma = strchr(start, ',');
-        int length = comma - start;
-        printf("%.*s\n", length, line);
+        if (arg) {
+            size_t len = strlen(arg);
+            if (strncmp(arg, start, len) == 0) {
+                printf("%s", line);
+            }
+        } else {
+            printf("%s", line);
+        }
     }
 
     fclose(fp);
@@ -197,21 +199,12 @@ void install_game(char *line) {
     FILE *fp;
     int result;
 
-    char name[50];
     char link[50];
-    char *comma = strchr(line, ',');
-    if (comma != NULL) {
-        int length = comma - line;
-        strncpy(name, line, length);
-        name[length] = '\0';
-        strcpy(link, comma + 1);
-        size_t len = strlen(link);
-        if (len > 0 && link[len-1] == '\n') {
-            link[len-1] = '\0';
-        }
-    } else {
-        printf("Name and link couldn't be split to install the game!\n");
-        return ;
+
+    strcpy(link, line);
+    size_t len = strlen(link);
+    if (len > 0 && link[len-1] == '\n') {
+        link[len-1] = '\0';
     }
 
     char *home_directory = getenv("HOME");
@@ -232,7 +225,7 @@ void install_game(char *line) {
     result = curl_easy_perform(curl);
 
     if (result == CURLE_OK) {
-        printf("Downloaded %s successfully!\n", name);
+        printf("Downloaded %s successfully!\n", link);
     } else {
         printf("Error: %s\n", curl_easy_strerror(result));
     }
@@ -241,103 +234,42 @@ void install_game(char *line) {
 }
 
 void install(char *arg) {
-    FILE *fp;
-    char *line = NULL;
-    size_t len = 0;
-    ssize_t read;
-
-
-    char *home_directory = getenv("HOME");
-
-    char index_file_path[1048];
-    snprintf(index_file_path, sizeof(index_file_path), "%s/.ifman/index.csv", home_directory);
-    fp = fopen(index_file_path, "r");
-
-    while ((read = getline(&line, &len, fp)) != -1) {
-        char *start = line;
-        char *comma = strchr(start, ',');
-        int length = comma - start;
-        
-        if (strncmp(line, arg, length) == 0) {
-            install_game(line);
-            return;
-        }
-    }
-    printf("File not found!\n");
-    
-    fclose(fp);
+    install_game(arg);
 }
 
 void uninstall_game(char *line) {
-    CURL *curl;
-    FILE *fp;
-    int result;
-
-    char name[50];
     char link[50];
-    char *comma = strchr(line, ',');
-    if (comma != NULL) {
-        int length = comma - line;
-        strncpy(name, line, length);
-        name[length] = '\0';
-        strcpy(link, comma + 1);
-        size_t len = strlen(link);
-        if (len > 0 && link[len-1] == '\n') {
-            link[len-1] = '\0';
-        }
-    } else {
-        printf("Name and link couldn't be split to install the game!\n");
-        return ;
+    strcpy(link, line);
+    size_t len = strlen(link);
+    if (len > 0 && link[len-1] == '\n') {
+        link[len-1] = '\0';
     }
 
     char *home_directory = getenv("HOME");
     char file_path[1048];
     snprintf(file_path, sizeof(file_path), "%s/.ifman/games/%s", home_directory, link);
     remove(file_path);
-    printf("Removed game %s\n", name);
+    printf("Removed game %s\n", link);
 }
 
 void uninstall(char *arg) {
-    FILE *fp;
-    char *line = NULL;
-    size_t len = 0;
-    ssize_t read;
-
-
-    char *home_directory = getenv("HOME");
-
-    char index_file_path[1048];
-    snprintf(index_file_path, sizeof(index_file_path), "%s/.ifman/index.csv", home_directory);
-    fp = fopen(index_file_path, "r");
-
-    while ((read = getline(&line, &len, fp)) != -1) {
-        char *start = line;
-        char *comma = strchr(start, ',');
-        int length = comma - start;
-        
-        if (strncmp(line, arg, length) == 0) {
-            uninstall_game(line);
-            return;
-        }
-    }
-    printf("File not found!\n");
-    
-    fclose(fp);
+    uninstall_game(arg);
 }
 
 int manage(int argc, char **argv) {
     int opt;
     static struct option long_options[] = {
-        {"list", no_argument, 0, 'l'},
+        {"list", optional_argument, NULL, 'l'},
         {"installed", no_argument, 0, 'L'},
         {"install", required_argument, 0, 'S'},
         {"remove", required_argument, 0, 'D'},
         {0, 0, 0, 0}
     };
-    opt = getopt_long(argc, argv, "hvfS:D:L:", long_options, 0);
+    opt = getopt_long(argc, argv, "l::LS:D:", long_options, 0);
     switch (opt) {
         case 'l':
-            list();
+            OPTIONAL_ARGUMENT_IS_PRESENT;
+            list(optarg);
             break;
         case 'L':
             installed();
